@@ -1,42 +1,37 @@
 import React, { Component } from 'react';
-//import logo from './logo.svg';
+import PropTypes from 'prop-types';
 import './App.css';
 
 const DEFAULT_QUERY = 'redux';
+const DEFAULT_PAGE = 0;
+const DEFAULT_HPP = '100';
+
 const PATH_BASE = 'https://hn.algolia.com/api/v1';
 const PATH_SEARCH = '/search';
 const PARAM_SEARCH = 'query=';
+const PARAM_PAGE = 'page=';
+const PARAM_HPP = 'hitsPerPage=';
 
-// const list = [
-//     {
-//         title: 'React',
-//         url: 'https://facebook.github.io/react/',
-//         author: 'Jordan Walke',
-//         num_comments: 3,
-//         points: 4,
-//         objectID: 0
-//     },
-//     {
-//         title: 'Redux',
-//         url: 'https://github.com/reactjs/redux',
-//         author: 'Dan Abramov, Andrew Clark',
-//         num_comments: 2,
-//         points: 5,
-//         objectID: 1
-//     }
-// ];
-
-const isSearched = searchTerm => item =>
-    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase());
-
-const Search = ({ value, onChange, children }) =>
-    <form>
+const Search = ({ value, onChange, onSubmit, children }) =>
+    <form onSubmit={onSubmit}>
         {children} <input type="text" value={value} onChange={onChange} />
+        <button type="submit">{children}</button>
     </form>;
+
+Search.defaultProps = {
+    value: ''
+};
+
+Search.propTypes = {
+    value: PropTypes.string,
+    onChange: PropTypes.func,
+    onSubmit: PropTypes.func,
+    children: PropTypes.node.isRequired
+};
 
 const Table = ({ list, pattern, onDismiss }) =>
     <div className="table">
-        {list.filter(isSearched(pattern)).map(item =>
+        {list.map(item =>
             <div key={item.objectID} className="table-row">
                 <span style={{ width: '40%' }}>
                     <a href={item.url}>
@@ -64,81 +59,108 @@ const Table = ({ list, pattern, onDismiss }) =>
         )}
     </div>;
 
-/*
-const Table = ({ list, pattern, onDismiss }) =>
-    <div>
-        { list.filter(isSearched(pattern)).map(item => 
-            <Post
-                id={item.objectID}
-                url={item.url}
-                title={item.title}
-                author={item.author}
-                num_comments={item.num_comments}
-                points={item.points} 
-                onDismiss={onDismiss} />
-        )}
-    </div>
-*/
+Table.propTypes = {
+    list: PropTypes.arrayOf(
+        PropTypes.shape({
+            objectID: PropTypes.string.isRequired,
+            author: PropTypes.string,
+            url: PropTypes.string,
+            num_comments: PropTypes.number,
+            points: PropTypes.number
+        })
+    ).isRequired,
+    onDismiss: PropTypes.func.isRequired
+};
 
-const Post = ({ id, url, title, author, num_comments, points, onDismiss }) =>
-    <div key={id}>
-        <span>
-            <a href={url}>
-                {title}
-            </a>
-        </span>
-        <span>
-            Author: {author}
-        </span>
-        <span>
-            Comments: {num_comments}
-        </span>
-        <span>
-            Points: {points}
-        </span>
-        <span>
-            <Button onClick={() => onDismiss(id)}>Dismiss</Button>
-        </span>
-    </div>;
-
-const Button = ({ onClick, className = '', children }) =>
+const Button = ({ onClick, className, children }) =>
     <button onClick={onClick} className={className} type="button">
         {children}
     </button>;
+
+Button.defaultProps = {
+    className: ''
+};
+
+Button.propTypes = {
+    onClick: PropTypes.func.isRequired,
+    className: PropTypes.string,
+    children: PropTypes.node.isRequired
+};
 
 class App extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            result: null,
+            results: null,
+            searchKey: '',
             searchTerm: DEFAULT_QUERY
         };
+
+        this.needsToSearchTopstories = this.needsToSearchTopstories.bind(this);
         this.setSearchTopstories = this.setSearchTopstories.bind(this);
         this.fetchSearchTopstories = this.fetchSearchTopstories.bind(this);
+        this.onSearchSubmit = this.onSearchSubmit.bind(this);
         this.onSearchChange = this.onSearchChange.bind(this);
         this.onDismiss = this.onDismiss.bind(this);
     }
 
-    setSearchTopstories(result) {
-        this.setState({ result });
+    needsToSearchTopstories(searchTerm) {
+        return !this.state.results[searchTerm];
     }
 
-    fetchSearchTopstories(searchTerm) {
-        fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}`)
+    setSearchTopstories(result) {
+        const { hits, page } = result;
+        const { searchKey, results } = this.state;
+        const oldHits =
+            results && results[searchKey] ? results[searchKey].hits : [];
+
+        const updatedHits = [...oldHits, ...hits];
+        this.setState({
+            results: {
+                ...results,
+                [searchKey]: { hits: updatedHits, page }
+            }
+        });
+    }
+
+    fetchSearchTopstories(searchTerm, page) {
+        // console.log(
+        //     `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`
+        // );
+        fetch(
+            `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`
+        )
             .then(response => response.json())
             .then(result => this.setSearchTopstories(result))
             .catch(e => e);
     }
 
+    onSearchSubmit(event) {
+        const { searchTerm } = this.state;
+        this.setState({ searchKey: searchTerm });
+
+        if (this.needsToSearchTopstories(searchTerm)) {
+            this.fetchSearchTopstories(searchTerm, DEFAULT_PAGE);
+        }
+
+        event.preventDefault();
+    }
+
     componentDidMount() {
         const { searchTerm } = this.state;
-        this.fetchSearchTopstories(searchTerm);
+        this.setState({ searchKey: searchTerm });
+        this.fetchSearchTopstories(searchTerm, DEFAULT_PAGE);
     }
 
     onDismiss(id) {
+        const { searchKey, results } = this.state;
+        const { hits, page } = results[searchKey];
+
         const isNotId = item => item.objectID !== id;
-        const updatedList = this.state.list.filter(isNotId);
-        this.setState({ list: updatedList });
+        const updatedHits = hits.filter(isNotId);
+        this.setState({
+            results: { ...results, [searchKey]: { hits: updatedHits, page } }
+        });
     }
 
     onSearchChange(event) {
@@ -146,28 +168,39 @@ class App extends Component {
     }
 
     render() {
-        const { searchTerm, result } = this.state;
-
-        if (!result) {
-            return null;
-        }
+        const { searchTerm, results, searchKey } = this.state;
+        const page =
+            (results && results[searchKey] && results[searchKey].page) || 0;
+        const list =
+            (results && results[searchKey] && results[searchKey].hits) || [];
 
         return (
             <div className="page">
                 <div className="interactions">
-                    <Search value={searchTerm} onChange={this.onSearchChange}>
+                    <Search
+                        value={searchTerm}
+                        onChange={this.onSearchChange}
+                        onSubmit={this.onSearchSubmit}
+                    >
                         Search
                     </Search>
                 </div>
 
-                <Table
-                    list={result.hits}
-                    pattern={searchTerm}
-                    onDismiss={this.onDismiss}
-                />
+                <Table list={list} onDismiss={this.onDismiss} />
+
+                <div className="interactions">
+                    <Button
+                        onClick={() =>
+                            this.fetchSearchTopstories(searchKey, page + 1)}
+                    >
+                        More
+                    </Button>
+                </div>
             </div>
         );
     }
 }
 
 export default App;
+
+export { Button, Search, Table };
