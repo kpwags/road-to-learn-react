@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import './App.css';
+import 'font-awesome/css/font-awesome.min.css';
 
 const DEFAULT_QUERY = 'redux';
 const DEFAULT_PAGE = 0;
@@ -12,11 +13,33 @@ const PARAM_SEARCH = 'query=';
 const PARAM_PAGE = 'page=';
 const PARAM_HPP = 'hitsPerPage=';
 
-const Search = ({ value, onChange, onSubmit, children }) =>
-    <form onSubmit={onSubmit}>
-        {children} <input type="text" value={value} onChange={onChange} />
-        <button type="submit">{children}</button>
-    </form>;
+const Loading = () => <div className="fa fa-spinner" size="2x" />;
+
+class Search extends Component {
+    componentDidMount() {
+        this.input.focus();
+    }
+
+    render() {
+        const { value, onChange, onSubmit, children } = this.props;
+
+        return (
+            <form onSubmit={onSubmit}>
+                <input
+                    type="text"
+                    value={value}
+                    onChange={onChange}
+                    ref={node => {
+                        this.input = node;
+                    }}
+                />
+                <button type="submit">
+                    {children}
+                </button>
+            </form>
+        );
+    }
+}
 
 Search.defaultProps = {
     value: ''
@@ -93,7 +116,8 @@ class App extends Component {
         this.state = {
             results: null,
             searchKey: '',
-            searchTerm: DEFAULT_QUERY
+            searchTerm: DEFAULT_QUERY,
+            isLoading: false
         };
 
         this.needsToSearchTopstories = this.needsToSearchTopstories.bind(this);
@@ -119,14 +143,14 @@ class App extends Component {
             results: {
                 ...results,
                 [searchKey]: { hits: updatedHits, page }
-            }
+            },
+            isLoading: false
         });
     }
 
     fetchSearchTopstories(searchTerm, page) {
-        // console.log(
-        //     `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`
-        // );
+        this.setState({ isLoading: true });
+
         fetch(
             `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`
         )
@@ -168,7 +192,7 @@ class App extends Component {
     }
 
     render() {
-        const { searchTerm, results, searchKey } = this.state;
+        const { searchTerm, results, searchKey, isLoading } = this.state;
         const page =
             (results && results[searchKey] && results[searchKey].page) || 0;
         const list =
@@ -189,12 +213,17 @@ class App extends Component {
                 <Table list={list} onDismiss={this.onDismiss} />
 
                 <div className="interactions">
-                    <Button
-                        onClick={() =>
-                            this.fetchSearchTopstories(searchKey, page + 1)}
-                    >
-                        More
-                    </Button>
+                    {isLoading
+                        ? <Loading />
+                        : <Button
+                              onClick={() =>
+                                  this.fetchSearchTopstories(
+                                      searchKey,
+                                      page + 1
+                                  )}
+                          >
+                              More
+                          </Button>}
                 </div>
             </div>
         );
